@@ -1,0 +1,105 @@
+---
+title: "Sending WhatsApp messages with Frida from a Mac"
+description: "A reverse-engineering walkthrough: instrumenting the WhatsApp macOS app so you can send messages programmatically — no UI required — and the terminology you need along the way."
+author: "Daniel Bartov"
+date: "2026-05-30"
+categories: [reverse-engineering, frida, ctf, macos]
+---
+
+This was a mobile reverse-engineering challenge: take the WhatsApp macOS app and
+drive it from the outside so you can **send messages programmatically**, without
+ever clicking anything in the UI. This post walks through how that works and
+explains the jargon as it comes up — so even if you've never reversed an app
+before, you can follow along.
+
+## The tools and terms
+
+A few things to know up front:
+
+- **Frida** is a *dynamic instrumentation* toolkit. In plain terms, it lets you
+  inject your own JavaScript into a running program and call the program's own
+  functions, read its memory, and intercept its behavior while it runs. It's the
+  Swiss-army knife of app reversing.
+- **Mac Catalyst** is the technology that lets an iPad app run on macOS. The
+  WhatsApp desktop app here is a Catalyst build, which means under the hood it's
+  really the iOS app — same internal class names, same frameworks.
+- **Objective-C runtime.** WhatsApp is written largely in Objective-C, a
+  language where method calls are resolved at runtime by name. That's a gift for
+  reversers: Frida can look up any class and call its methods by their string
+  names, almost like the app handed us an API.
+- **JID** (*Jabber ID*) is WhatsApp's internal address for a chat. WhatsApp's
+  messaging is built on XMPP (the same protocol behind Jabber chat), and every
+  conversation — a person or a group — is identified by a JID that looks like an
+  email address, e.g. `65614920028283@lid`. When we send a message, the JID is
+  *who* we're sending it to.
+
+## The plan
+
+We don't want to reimplement WhatsApp's encryption or network protocol — that's
+a losing battle. Instead we let the real app do all the heavy lifting and just
+ask it, from the inside, to send a message for us. With Frida injected, we can
+reach into the app, grab the objects it already uses to send messages, and call
+the send method ourselves.
+
+## The catch: thread context
+
+The first naive attempt crashes the app instantly with a **`SIGABRT`** (an abort
+signal — the program intentionally killing itself because an internal sanity
+check failed).
+
+The reason is that WhatsApp's send code asserts it's running inside one of the
+app's own *work queues* — a specific background thread the app uses to serialize
+its messaging work. (A **dispatch queue** is just a managed line of tasks that
+run one at a time on a background thread.) Call the send function from the wrong
+thread and the app notices the missing context and aborts to protect itself.
+
+The fix is to not fight it. WhatsApp exposes a callback,
+`runWhenConnected:`, that hands a block of code to the connection's own work
+queue and runs it there. By wrapping our send in that callback, our code runs in
+exactly the context the app expects — the assertion passes, nothing crashes, and
+we can fire a message on demand.
+
+## Driving it
+
+Everything is wrapped in a small interactive Python shell that launches or
+attaches to WhatsApp, injects the Frida agent, and drops you into a prompt:
+
+```sh
+# interactive shell
+python3 wa_shell.py
+
+# or one-shot from the command line — send one message and exit
+python3 wa_shell.py --send "65614920028283@lid" "hello from frida"
+```
+
+Inside the shell, the helpers read almost like a chat API:
+
+- `send_text(jid, text)` — send a text message to the chat identified by `jid`
+- `send_image(jid, path, caption)` — send an image
+- `set_jid(jid)` — filter live output to a single chat
+- `status()` — sanity-check that the internal send objects resolved correctly
+
+So sending a message is just:
+
+```python
+send_text("65614920028283@lid", "sent straight from Frida")
+```
+
+A couple of quirks worth knowing:
+
+- The **`jid`** is that internal chat address from earlier — not a phone number.
+  The `@lid` suffix is one of WhatsApp's addressing schemes for an identity.
+- Text sending only works for a chat that **already has an existing
+  conversation**, because the code looks up an existing chat *session* (the
+  established cryptographic conversation state with that contact) rather than
+  starting a fresh one.
+- Images need to be **"armed"** once — send a single image from the UI first —
+  before the programmatic image path will work.
+
+## Takeaway
+
+The recurring lesson in app reversing: you rarely need to beat the app at its
+own game. It already knows how to encrypt, address, and send a message — your
+job is just to find the right internal lever and pull it. And when the app
+fights back with self-protective assertions, the cleanest move is to borrow its
+own machinery (here, its work queue) rather than work around it.
