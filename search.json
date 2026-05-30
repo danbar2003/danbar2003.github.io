@@ -1,17 +1,45 @@
 [
   {
-    "objectID": "posts/welcome/index.html",
-    "href": "posts/welcome/index.html",
-    "title": "Welcome To My Blog",
+    "objectID": "posts/kernel-utils/index.html",
+    "href": "posts/kernel-utils/index.html",
+    "title": "kernel-utils: hacking on Linux kernels from a Mac",
     "section": "",
-    "text": "This is the first post in a Quarto blog. Welcome!\n\nSince this post doesn’t specify an explicit image, the first image in the post will be used in the listing page of posts."
+    "text": "When you do kernel CTF or exploit-dev work, most of your time is spent on the same handful of chores: get a kernel building in a clean environment, boot it under QEMU with the right hardening flags, and wire up a debugger and a way to push your exploit into the guest. Doing this on a Mac adds friction, since the kernel build really wants a Linux toolchain.\nkernel-utils is a small toolkit I put together to make that loop fast and repeatable from a macOS host. It installs three commands on your $PATH."
   },
   {
-    "objectID": "index.html",
-    "href": "index.html",
-    "title": "blog",
+    "objectID": "posts/kernel-utils/index.html#the-three-commands",
+    "href": "posts/kernel-utils/index.html#the-three-commands",
+    "title": "kernel-utils: hacking on Linux kernels from a Mac",
+    "section": "The three commands",
+    "text": "The three commands\n\nkdev [path] — builds and drops you into a kernel-build Docker container, mounting your current directory (or path) at /work. This is where the Linux toolchain lives, so the actual make happens here.\nkrun [bzImage] [initramfs] — boots a kernel under QEMU with hardened, CTF-friendly settings: SMEP/SMAP/KPTI on, a gdbstub listening on :1234, and guest port 8000 forwarded to host 8080. It auto-discovers arch/x86/boot/bzImage, ./bzImage, and ./initramfs.cpio.gz in the current directory, so usually you just type krun.\nkbuild-initramfs — builds an initramfs.cpio.gz in the current directory, copying files from your cwd into /exploit inside the image."
+  },
+  {
+    "objectID": "posts/kernel-utils/index.html#a-typical-session",
+    "href": "posts/kernel-utils/index.html#a-typical-session",
+    "title": "kernel-utils: hacking on Linux kernels from a Mac",
+    "section": "A typical session",
+    "text": "A typical session\nmkdir ~/kernel-work && cd ~/kernel-work\nkdev                                   # enter container, $PWD mounted at /work\n# inside the container:\ngit clone --depth 1 -b v6.17 \\\n  git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git\ncd linux\nmake defconfig\nmake -j$(nproc) bzImage\nkrun                                   # boots arch/x86/boot/bzImage\nOnce the guest is up, pulling in your exploit is a one-liner (the host’s QEMU forward is reachable from inside the guest at 10.0.2.2:8000):\nrm exploit; wget http://10.0.2.2:8000/exploit && chmod +x ./exploit"
+  },
+  {
+    "objectID": "posts/kernel-utils/index.html#knobs-worth-knowing",
+    "href": "posts/kernel-utils/index.html#knobs-worth-knowing",
+    "title": "kernel-utils: hacking on Linux kernels from a Mac",
+    "section": "Knobs worth knowing",
+    "text": "Knobs worth knowing\nA couple of environment variables tune krun:\n\nKU_NIC — the QEMU NIC model. e1000 (default) or virtio (alias for virtio-net-pci). Only pick virtio if your kernel has CONFIG_VIRTIO_NET=y and CONFIG_VIRTIO_PCI=y, otherwise eth0 won’t show up in the guest.\nKASLR — 0 (default) appends nokaslr to the kernel cmdline, which is the CTF-friendly default. Set KASLR=1 to enable it.\n\nKU_NIC=virtio KASLR=1 krun"
+  },
+  {
+    "objectID": "posts/kernel-utils/index.html#install",
+    "href": "posts/kernel-utils/index.html#install",
+    "title": "kernel-utils: hacking on Linux kernels from a Mac",
+    "section": "Install",
+    "text": "Install\npipx install .          # or: pip install -e .\nThat’s the whole thing — three commands that turn “I want to debug a kernel bug” into about a minute of setup instead of an afternoon of yak-shaving."
+  },
+  {
+    "objectID": "posts/post-with-code/index.html",
+    "href": "posts/post-with-code/index.html",
+    "title": "Post With Code",
     "section": "",
-    "text": "Post With Code\n\n\n\nnews\n\ncode\n\nanalysis\n\n\n\n\n\n\n\n\n\nMay 30, 2026\n\n\nHarlow Malloc\n\n\n\n\n\n\n\n\n\n\n\n\nWelcome To My Blog\n\n\n\nnews\n\n\n\n\n\n\n\n\n\nMay 27, 2026\n\n\nTristan O’Malley\n\n\n\n\n\nNo matching items"
+    "text": "This is a post with executable code."
   },
   {
     "objectID": "about.html",
@@ -21,10 +49,17 @@
     "text": "About this blog"
   },
   {
-    "objectID": "posts/post-with-code/index.html",
-    "href": "posts/post-with-code/index.html",
-    "title": "Post With Code",
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "blog",
     "section": "",
-    "text": "This is a post with executable code."
+    "text": "Post With Code\n\n\n\nnews\n\ncode\n\nanalysis\n\n\n\n\n\n\n\n\n\nMay 30, 2026\n\n\nHarlow Malloc\n\n\n\n\n\n\n\n\n\n\n\n\nkernel-utils: hacking on Linux kernels from a Mac\n\n\n\ntools\n\nkernel\n\nctf\n\nexploit-dev\n\n\n\nA small toolkit I built for kernel CTF and exploit-dev work — build, boot, and debug Linux kernels from a macOS host.\n\n\n\n\n\nMay 30, 2026\n\n\nDaniel Bartov\n\n\n\n\n\n\n\n\n\n\n\n\nWelcome To My Blog\n\n\n\nnews\n\n\n\n\n\n\n\n\n\nMay 27, 2026\n\n\nTristan O’Malley\n\n\n\n\n\nNo matching items"
+  },
+  {
+    "objectID": "posts/welcome/index.html",
+    "href": "posts/welcome/index.html",
+    "title": "Welcome To My Blog",
+    "section": "",
+    "text": "This is the first post in a Quarto blog. Welcome!\n\nSince this post doesn’t specify an explicit image, the first image in the post will be used in the listing page of posts."
   }
 ]

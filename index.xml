@@ -34,6 +34,130 @@
   <media:content url="https://danbar2003.github.io/posts/post-with-code/image.jpg" medium="image" type="image/jpeg"/>
 </item>
 <item>
+  <title>kernel-utils: hacking on Linux kernels from a Mac</title>
+  <dc:creator>Daniel Bartov</dc:creator>
+  <link>https://danbar2003.github.io/posts/kernel-utils/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<p>When you do kernel CTF or exploit-dev work, most of your time is spent on the same handful of chores: get a kernel building in a clean environment, boot it under QEMU with the right hardening flags, and wire up a debugger and a way to push your exploit into the guest. Doing this on a Mac adds friction, since the kernel build really wants a Linux toolchain.</p>
+<p><strong>kernel-utils</strong> is a small toolkit I put together to make that loop fast and repeatable from a macOS host. It installs three commands on your <code>$PATH</code>.</p>
+<section id="the-three-commands" class="level2">
+<h2 class="anchored" data-anchor-id="the-three-commands">The three commands</h2>
+<ul>
+<li><strong><code>kdev [path]</code></strong> — builds and drops you into a kernel-build Docker container, mounting your current directory (or <code>path</code>) at <code>/work</code>. This is where the Linux toolchain lives, so the actual <code>make</code> happens here.</li>
+<li><strong><code>krun [bzImage] [initramfs]</code></strong> — boots a kernel under QEMU with hardened, CTF-friendly settings: SMEP/SMAP/KPTI on, a gdbstub listening on <code>:1234</code>, and guest port <code>8000</code> forwarded to host <code>8080</code>. It auto-discovers <code>arch/x86/boot/bzImage</code>, <code>./bzImage</code>, and <code>./initramfs.cpio.gz</code> in the current directory, so usually you just type <code>krun</code>.</li>
+<li><strong><code>kbuild-initramfs</code></strong> — builds an <code>initramfs.cpio.gz</code> in the current directory, copying files from your cwd into <code>/exploit</code> inside the image.</li>
+</ul>
+</section>
+<section id="a-typical-session" class="level2">
+<h2 class="anchored" data-anchor-id="a-typical-session">A typical session</h2>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1" style="background: #f1f3f5;"><pre class="sourceCode sh code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">mkdir</span> ~/kernel-work <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">&amp;&amp;</span> <span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">cd</span> ~/kernel-work</span>
+<span id="cb1-2"><span class="ex" style="color: null;
+background-color: null;
+font-style: inherit;">kdev</span>                                   <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># enter container, $PWD mounted at /work</span></span>
+<span id="cb1-3"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># inside the container:</span></span>
+<span id="cb1-4"><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">git</span> clone <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">--depth</span> 1 <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">-b</span> v6.17 <span class="dt" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">\</span></span>
+<span id="cb1-5">  git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git</span>
+<span id="cb1-6"><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">cd</span> linux</span>
+<span id="cb1-7"><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">make</span> defconfig</span>
+<span id="cb1-8"><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">make</span> <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">-j</span><span class="va" style="color: #111111;
+background-color: null;
+font-style: inherit;">$(</span><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">nproc</span><span class="va" style="color: #111111;
+background-color: null;
+font-style: inherit;">)</span> bzImage</span>
+<span id="cb1-9"><span class="ex" style="color: null;
+background-color: null;
+font-style: inherit;">krun</span>                                   <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># boots arch/x86/boot/bzImage</span></span></code></pre></div></div>
+<p>Once the guest is up, pulling in your exploit is a one-liner (the host’s QEMU forward is reachable from inside the guest at <code>10.0.2.2:8000</code>):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2" style="background: #f1f3f5;"><pre class="sourceCode sh code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">rm</span> exploit<span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">;</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">wget</span> http://10.0.2.2:8000/exploit <span class="kw" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">&amp;&amp;</span> <span class="fu" style="color: #4758AB;
+background-color: null;
+font-style: inherit;">chmod</span> +x ./exploit</span></code></pre></div></div>
+</section>
+<section id="knobs-worth-knowing" class="level2">
+<h2 class="anchored" data-anchor-id="knobs-worth-knowing">Knobs worth knowing</h2>
+<p>A couple of environment variables tune <code>krun</code>:</p>
+<ul>
+<li><strong><code>KU_NIC</code></strong> — the QEMU NIC model. <code>e1000</code> (default) or <code>virtio</code> (alias for <code>virtio-net-pci</code>). Only pick <code>virtio</code> if your kernel has <code>CONFIG_VIRTIO_NET=y</code> and <code>CONFIG_VIRTIO_PCI=y</code>, otherwise <code>eth0</code> won’t show up in the guest.</li>
+<li><strong><code>KASLR</code></strong> — <code>0</code> (default) appends <code>nokaslr</code> to the kernel cmdline, which is the CTF-friendly default. Set <code>KASLR=1</code> to enable it.</li>
+</ul>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3" style="background: #f1f3f5;"><pre class="sourceCode sh code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><span class="va" style="color: #111111;
+background-color: null;
+font-style: inherit;">KU_NIC</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>virtio <span class="va" style="color: #111111;
+background-color: null;
+font-style: inherit;">KASLR</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>1 <span class="ex" style="color: null;
+background-color: null;
+font-style: inherit;">krun</span></span></code></pre></div></div>
+</section>
+<section id="install" class="level2">
+<h2 class="anchored" data-anchor-id="install">Install</h2>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4" style="background: #f1f3f5;"><pre class="sourceCode sh code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><span class="ex" style="color: null;
+background-color: null;
+font-style: inherit;">pipx</span> install .          <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># or: pip install -e .</span></span></code></pre></div></div>
+<p>That’s the whole thing — three commands that turn “I want to debug a kernel bug” into about a minute of setup instead of an afternoon of yak-shaving.</p>
+
+
+</section>
+
+ ]]></description>
+  <category>tools</category>
+  <category>kernel</category>
+  <category>ctf</category>
+  <category>exploit-dev</category>
+  <guid>https://danbar2003.github.io/posts/kernel-utils/</guid>
+  <pubDate>Sat, 30 May 2026 00:00:00 GMT</pubDate>
+</item>
+<item>
   <title>Welcome To My Blog</title>
   <dc:creator>Tristan O&#39;Malley</dc:creator>
   <link>https://danbar2003.github.io/posts/welcome/</link>
