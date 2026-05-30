@@ -1,0 +1,74 @@
+---
+title: "kernel-utils: hacking on Linux kernels from a Mac"
+description: "A small toolkit I built for kernel CTF and exploit-dev work — build, boot, and debug Linux kernels from a macOS host."
+author: "Daniel Bartov"
+date: "2026-05-30"
+categories: [tools, kernel, ctf, exploit-dev]
+---
+
+When you do kernel CTF or exploit-dev work, most of your time is spent on the
+same handful of chores: get a kernel building in a clean environment, boot it
+under QEMU with the right hardening flags, and wire up a debugger and a way to
+push your exploit into the guest. Doing this on a Mac adds friction, since the
+kernel build really wants a Linux toolchain.
+
+**kernel-utils** is a small toolkit I put together to make that loop fast and
+repeatable from a macOS host. It installs three commands on your `$PATH`.
+
+## The three commands
+
+- **`kdev [path]`** — builds and drops you into a kernel-build Docker
+  container, mounting your current directory (or `path`) at `/work`. This is
+  where the Linux toolchain lives, so the actual `make` happens here.
+- **`krun [bzImage] [initramfs]`** — boots a kernel under QEMU with hardened,
+  CTF-friendly settings: SMEP/SMAP/KPTI on, a gdbstub listening on `:1234`,
+  and guest port `8000` forwarded to host `8080`. It auto-discovers
+  `arch/x86/boot/bzImage`, `./bzImage`, and `./initramfs.cpio.gz` in the
+  current directory, so usually you just type `krun`.
+- **`kbuild-initramfs`** — builds an `initramfs.cpio.gz` in the current
+  directory, copying files from your cwd into `/exploit` inside the image.
+
+## A typical session
+
+```sh
+mkdir ~/kernel-work && cd ~/kernel-work
+kdev                                   # enter container, $PWD mounted at /work
+# inside the container:
+git clone --depth 1 -b v6.17 \
+  git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+cd linux
+make defconfig
+make -j$(nproc) bzImage
+krun                                   # boots arch/x86/boot/bzImage
+```
+
+Once the guest is up, pulling in your exploit is a one-liner (the host's
+QEMU forward is reachable from inside the guest at `10.0.2.2:8000`):
+
+```sh
+rm exploit; wget http://10.0.2.2:8000/exploit && chmod +x ./exploit
+```
+
+## Knobs worth knowing
+
+A couple of environment variables tune `krun`:
+
+- **`KU_NIC`** — the QEMU NIC model. `e1000` (default) or `virtio` (alias for
+  `virtio-net-pci`). Only pick `virtio` if your kernel has
+  `CONFIG_VIRTIO_NET=y` and `CONFIG_VIRTIO_PCI=y`, otherwise `eth0` won't show
+  up in the guest.
+- **`KASLR`** — `0` (default) appends `nokaslr` to the kernel cmdline, which is
+  the CTF-friendly default. Set `KASLR=1` to enable it.
+
+```sh
+KU_NIC=virtio KASLR=1 krun
+```
+
+## Install
+
+```sh
+pipx install .          # or: pip install -e .
+```
+
+That's the whole thing — three commands that turn "I want to debug a kernel
+bug" into about a minute of setup instead of an afternoon of yak-shaving.
