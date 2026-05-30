@@ -1,0 +1,18 @@
+project:
+  type: website
+
+website:
+  description: "Personal blog of Daniel Bartov"
+  site-url: https://danbar2003.github.io # change this if you later add a custom domain
+  title: "Daniel Bartov"
+  navbar:
+    right:
+      - about.qmd
+      - icon: github
+        href: https://github.com/danbar2003
+format:
+  html:
+    theme:
+      - cosmo
+      - brand
+    css: styles.css
