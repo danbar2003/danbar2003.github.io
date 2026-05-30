@@ -12,6 +12,10 @@ ever clicking anything in the UI. This post walks through how that works and
 explains the jargon as it comes up — so even if you've never reversed an app
 before, you can follow along.
 
+> The tooling is on GitHub: [**danbar2003/whatsapp-frida**](https://github.com/danbar2003/whatsapp-frida).
+> (The repo ships only the scripts and the writeup — not WhatsApp's binary or any
+> captured data.)
+
 ## The tools and terms
 
 A few things to know up front:
@@ -103,3 +107,5 @@ own game. It already knows how to encrypt, address, and send a message — your
 job is just to find the right internal lever and pull it. And when the app
 fights back with self-protective assertions, the cleanest move is to borrow its
 own machinery (here, its work queue) rather than work around it.
+
+*This post was written mostly by AI, but led and directed by me.*

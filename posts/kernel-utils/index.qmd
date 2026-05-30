@@ -72,3 +72,5 @@ pipx install .          # or: pip install -e .
 
 That's the whole thing — three commands that turn "I want to debug a kernel
 bug" into about a minute of setup instead of an afternoon of yak-shaving.
+
+*This post was written mostly by AI, but led and directed by me.*
