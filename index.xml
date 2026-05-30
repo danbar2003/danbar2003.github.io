@@ -21,6 +21,7 @@
 
 
 
+
 <p>When you do kernel CTF or exploit-dev work, most of your time is spent on the same handful of chores: get a kernel building in a clean environment, boot it under QEMU with the right hardening flags, and wire up a debugger and a way to push your exploit into the guest. Doing this on a Mac adds friction, since the kernel build really wants a Linux toolchain.</p>
 <p><strong>kernel-utils</strong> is a small toolkit I put together to make that loop fast and repeatable from a macOS host. It installs three commands on your <code>$PATH</code>.</p>
 <section id="the-three-commands" class="level2">
