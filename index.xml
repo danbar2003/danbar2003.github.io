@@ -23,6 +23,9 @@
 
 
 <p>This was a mobile reverse-engineering challenge: take the WhatsApp macOS app and drive it from the outside so you can <strong>send messages programmatically</strong>, without ever clicking anything in the UI. This post walks through how that works and explains the jargon as it comes up — so even if you’ve never reversed an app before, you can follow along.</p>
+<blockquote class="blockquote">
+<p>The tooling is on GitHub: <a href="https://github.com/danbar2003/whatsapp-frida"><strong>danbar2003/whatsapp-frida</strong></a>. (The repo ships only the scripts and the writeup — not WhatsApp’s binary or any captured data.)</p>
+</blockquote>
 <section id="the-tools-and-terms" class="level2">
 <h2 class="anchored" data-anchor-id="the-tools-and-terms">The tools and terms</h2>
 <p>A few things to know up front:</p>
@@ -88,6 +91,7 @@ font-style: inherit;">"sent straight from Frida"</span>)</span></code></pre></di
 <section id="takeaway" class="level2">
 <h2 class="anchored" data-anchor-id="takeaway">Takeaway</h2>
 <p>The recurring lesson in app reversing: you rarely need to beat the app at its own game. It already knows how to encrypt, address, and send a message — your job is just to find the right internal lever and pull it. And when the app fights back with self-protective assertions, the cleanest move is to borrow its own machinery (here, its work queue) rather than work around it.</p>
+<p><em>This post was written mostly by AI, but led and directed by me.</em></p>
 
 
 </section>
@@ -213,6 +217,7 @@ font-style: inherit;">pipx</span> install .          <span class="co" style="col
 background-color: null;
 font-style: inherit;"># or: pip install -e .</span></span></code></pre></div></div>
 <p>That’s the whole thing — three commands that turn “I want to debug a kernel bug” into about a minute of setup instead of an afternoon of yak-shaving.</p>
+<p><em>This post was written mostly by AI, but led and directed by me.</em></p>
 
 
 </section>

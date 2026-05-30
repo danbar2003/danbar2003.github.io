@@ -32,7 +32,7 @@
     "href": "posts/kernel-utils/index.html#install",
     "title": "kernel-utils: hacking on Linux kernels from a Mac",
     "section": "Install",
-    "text": "Install\npipx install .          # or: pip install -e .\nThat’s the whole thing — three commands that turn “I want to debug a kernel bug” into about a minute of setup instead of an afternoon of yak-shaving."
+    "text": "Install\npipx install .          # or: pip install -e .\nThat’s the whole thing — three commands that turn “I want to debug a kernel bug” into about a minute of setup instead of an afternoon of yak-shaving.\nThis post was written mostly by AI, but led and directed by me."
   },
   {
     "objectID": "index.html",
@@ -88,6 +88,6 @@
     "href": "posts/whatsapp-ctf/index.html#takeaway",
     "title": "Sending WhatsApp messages with Frida from a Mac",
     "section": "Takeaway",
-    "text": "Takeaway\nThe recurring lesson in app reversing: you rarely need to beat the app at its own game. It already knows how to encrypt, address, and send a message — your job is just to find the right internal lever and pull it. And when the app fights back with self-protective assertions, the cleanest move is to borrow its own machinery (here, its work queue) rather than work around it."
+    "text": "Takeaway\nThe recurring lesson in app reversing: you rarely need to beat the app at its own game. It already knows how to encrypt, address, and send a message — your job is just to find the right internal lever and pull it. And when the app fights back with self-protective assertions, the cleanest move is to borrow its own machinery (here, its work queue) rather than work around it.\nThis post was written mostly by AI, but led and directed by me."
   }
 ]
