@@ -12,6 +12,95 @@
 <generator>quarto-1.9.38</generator>
 <lastBuildDate>Sat, 30 May 2026 00:00:00 GMT</lastBuildDate>
 <item>
+  <title>Sending WhatsApp messages with Frida from a Mac</title>
+  <dc:creator>Daniel Bartov</dc:creator>
+  <link>https://danbar2003.github.io/posts/whatsapp-ctf/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+
+<p>This was a mobile reverse-engineering challenge: take the WhatsApp macOS app and drive it from the outside so you can <strong>send messages programmatically</strong>, without ever clicking anything in the UI. This post walks through how that works and explains the jargon as it comes up — so even if you’ve never reversed an app before, you can follow along.</p>
+<section id="the-tools-and-terms" class="level2">
+<h2 class="anchored" data-anchor-id="the-tools-and-terms">The tools and terms</h2>
+<p>A few things to know up front:</p>
+<ul>
+<li><strong>Frida</strong> is a <em>dynamic instrumentation</em> toolkit. In plain terms, it lets you inject your own JavaScript into a running program and call the program’s own functions, read its memory, and intercept its behavior while it runs. It’s the Swiss-army knife of app reversing.</li>
+<li><strong>Mac Catalyst</strong> is the technology that lets an iPad app run on macOS. The WhatsApp desktop app here is a Catalyst build, which means under the hood it’s really the iOS app — same internal class names, same frameworks.</li>
+<li><strong>Objective-C runtime.</strong> WhatsApp is written largely in Objective-C, a language where method calls are resolved at runtime by name. That’s a gift for reversers: Frida can look up any class and call its methods by their string names, almost like the app handed us an API.</li>
+<li><strong>JID</strong> (<em>Jabber ID</em>) is WhatsApp’s internal address for a chat. WhatsApp’s messaging is built on XMPP (the same protocol behind Jabber chat), and every conversation — a person or a group — is identified by a JID that looks like an email address, e.g.&nbsp;<code>65614920028283@lid</code>. When we send a message, the JID is <em>who</em> we’re sending it to.</li>
+</ul>
+</section>
+<section id="the-plan" class="level2">
+<h2 class="anchored" data-anchor-id="the-plan">The plan</h2>
+<p>We don’t want to reimplement WhatsApp’s encryption or network protocol — that’s a losing battle. Instead we let the real app do all the heavy lifting and just ask it, from the inside, to send a message for us. With Frida injected, we can reach into the app, grab the objects it already uses to send messages, and call the send method ourselves.</p>
+</section>
+<section id="the-catch-thread-context" class="level2">
+<h2 class="anchored" data-anchor-id="the-catch-thread-context">The catch: thread context</h2>
+<p>The first naive attempt crashes the app instantly with a <strong><code>SIGABRT</code></strong> (an abort signal — the program intentionally killing itself because an internal sanity check failed).</p>
+<p>The reason is that WhatsApp’s send code asserts it’s running inside one of the app’s own <em>work queues</em> — a specific background thread the app uses to serialize its messaging work. (A <strong>dispatch queue</strong> is just a managed line of tasks that run one at a time on a background thread.) Call the send function from the wrong thread and the app notices the missing context and aborts to protect itself.</p>
+<p>The fix is to not fight it. WhatsApp exposes a callback, <code>runWhenConnected:</code>, that hands a block of code to the connection’s own work queue and runs it there. By wrapping our send in that callback, our code runs in exactly the context the app expects — the assertion passes, nothing crashes, and we can fire a message on demand.</p>
+</section>
+<section id="driving-it" class="level2">
+<h2 class="anchored" data-anchor-id="driving-it">Driving it</h2>
+<p>Everything is wrapped in a small interactive Python shell that launches or attaches to WhatsApp, injects the Frida agent, and drops you into a prompt:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1" style="background: #f1f3f5;"><pre class="sourceCode sh code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># interactive shell</span></span>
+<span id="cb1-2"><span class="ex" style="color: null;
+background-color: null;
+font-style: inherit;">python3</span> wa_shell.py</span>
+<span id="cb1-3"></span>
+<span id="cb1-4"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># or one-shot from the command line — send one message and exit</span></span>
+<span id="cb1-5"><span class="ex" style="color: null;
+background-color: null;
+font-style: inherit;">python3</span> wa_shell.py <span class="at" style="color: #657422;
+background-color: null;
+font-style: inherit;">--send</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"65614920028283@lid"</span> <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"hello from frida"</span></span></code></pre></div></div>
+<p>Inside the shell, the helpers read almost like a chat API:</p>
+<ul>
+<li><code>send_text(jid, text)</code> — send a text message to the chat identified by <code>jid</code></li>
+<li><code>send_image(jid, path, caption)</code> — send an image</li>
+<li><code>set_jid(jid)</code> — filter live output to a single chat</li>
+<li><code>status()</code> — sanity-check that the internal send objects resolved correctly</li>
+</ul>
+<p>So sending a message is just:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1">send_text(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"65614920028283@lid"</span>, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"sent straight from Frida"</span>)</span></code></pre></div></div>
+<p>A couple of quirks worth knowing:</p>
+<ul>
+<li>The <strong><code>jid</code></strong> is that internal chat address from earlier — not a phone number. The <code>@lid</code> suffix is one of WhatsApp’s addressing schemes for an identity.</li>
+<li>Text sending only works for a chat that <strong>already has an existing conversation</strong>, because the code looks up an existing chat <em>session</em> (the established cryptographic conversation state with that contact) rather than starting a fresh one.</li>
+<li>Images need to be <strong>“armed”</strong> once — send a single image from the UI first — before the programmatic image path will work.</li>
+</ul>
+</section>
+<section id="takeaway" class="level2">
+<h2 class="anchored" data-anchor-id="takeaway">Takeaway</h2>
+<p>The recurring lesson in app reversing: you rarely need to beat the app at its own game. It already knows how to encrypt, address, and send a message — your job is just to find the right internal lever and pull it. And when the app fights back with self-protective assertions, the cleanest move is to borrow its own machinery (here, its work queue) rather than work around it.</p>
+
+
+</section>
+
+ ]]></description>
+  <category>reverse-engineering</category>
+  <category>frida</category>
+  <category>ctf</category>
+  <category>macos</category>
+  <guid>https://danbar2003.github.io/posts/whatsapp-ctf/</guid>
+  <pubDate>Sat, 30 May 2026 00:00:00 GMT</pubDate>
+</item>
+<item>
   <title>kernel-utils: hacking on Linux kernels from a Mac</title>
   <dc:creator>Daniel Bartov</dc:creator>
   <link>https://danbar2003.github.io/posts/kernel-utils/</link>

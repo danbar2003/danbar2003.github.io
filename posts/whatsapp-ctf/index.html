@@ -6,8 +6,11 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
+<meta name="author" content="Daniel Bartov">
+<meta name="dcterms.date" content="2026-05-30">
+<meta name="description" content="A reverse-engineering walkthrough: instrumenting the WhatsApp macOS app so you can send messages programmatically — no UI required — and the terminology you need along the way.">
 
-<title>blog – Daniel Bartov</title>
+<title>Sending WhatsApp messages with Frida from a Mac – Daniel Bartov</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -23,32 +26,65 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
 </style>
 
 
-<script src="site_libs/quarto-nav/quarto-nav.js"></script>
-<script src="site_libs/quarto-nav/headroom.min.js"></script>
-<script src="site_libs/clipboard/clipboard.min.js"></script>
-<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
-<script src="site_libs/quarto-search/fuse.min.js"></script>
-<script src="site_libs/quarto-search/quarto-search.js"></script>
-<meta name="quarto:offset" content="./">
-<script src="site_libs/quarto-listing/list.min.js"></script>
-<script src="site_libs/quarto-listing/quarto-listing.js"></script>
-<script src="site_libs/quarto-html/quarto.js" type="module"></script>
-<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
-<script src="site_libs/quarto-html/popper.min.js"></script>
-<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
-<script src="site_libs/quarto-html/anchor.min.js"></script>
-<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-0a6b7249c26820e032cb0bd839ff02b1.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
-<script src="site_libs/bootstrap/bootstrap.min.js"></script>
-<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-94b323657c735dfe3b1bf6ebb2c33a55.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="site_libs/bootstrap/bootstrap-dark-bf3f322ac8d240d639fe1d97eccc3f5a.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="site_libs/bootstrap/bootstrap-94b323657c735dfe3b1bf6ebb2c33a55.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-dark-0a6b7249c26820e032cb0bd839ff02b1.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap-94b323657c735dfe3b1bf6ebb2c33a55.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="../../site_libs/bootstrap/bootstrap-dark-bf3f322ac8d240d639fe1d97eccc3f5a.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="../../site_libs/bootstrap/bootstrap-94b323657c735dfe3b1bf6ebb2c33a55.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -76,70 +112,12 @@ ul.task-list li input[type="checkbox"] {
     "search-label": "Search"
   }
 }</script>
-<script>
 
-  window.document.addEventListener("DOMContentLoaded", function (_event) {
-    const listingTargetEl = window.document.querySelector('#listing-listing .list');
-    if (!listingTargetEl) {
-      // No listing discovered, do not attach.
-      return; 
-    }
 
-    const options = {
-      valueNames: ['listing-date','listing-title','listing-author','listing-image','listing-description','listing-categories',{ data: ['index'] },{ data: ['categories'] },{ data: ['listing-date-sort'] },{ data: ['listing-file-modified-sort'] }],
-      
-      searchColumns: ["listing-date","listing-title","listing-author","listing-image","listing-description","listing-categories"],
-    };
+<link rel="stylesheet" href="../../styles.css">
+</head>
 
-    window['quarto-listings'] = window['quarto-listings'] || {};
-    window['quarto-listings']['listing-listing'] = new List('listing-listing', options);
-
-    if (window['quarto-listing-loaded']) {
-      window['quarto-listing-loaded']();
-    }
-  });
-
-  window.addEventListener('hashchange',() => {
-    if (window['quarto-listing-loaded']) {
-      window['quarto-listing-loaded']();
-    }
-  })
-  </script>
-
-  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
-  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
-
-<script type="text/javascript">
-const typesetMath = (el) => {
-  if (window.MathJax) {
-    // MathJax Typeset
-    window.MathJax.typeset([el]);
-  } else if (window.katex) {
-    // KaTeX Render
-    var mathElements = el.getElementsByClassName("math");
-    var macros = [];
-    for (var i = 0; i < mathElements.length; i++) {
-      var texText = mathElements[i].firstChild;
-      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
-        window.katex.render(texText.data, mathElements[i], {
-          displayMode: mathElements[i].classList.contains('display'),
-          throwOnError: false,
-          macros: macros,
-          fleqn: false
-        });
-      }
-    }
-  }
-}
-window.Quarto = {
-  typesetMath
-};
-</script>
-
-<link rel="stylesheet" href="styles.css">
-<link rel="alternate" type="application/rss+xml" title="Daniel Bartov" href="index.xml" data-external="1"></head>
-
-<body class="nav-fixed quarto-light"><script id="quarto-html-before-body" type="application/javascript">
+<body class="nav-fixed fullcontent quarto-light"><script id="quarto-html-before-body" type="application/javascript">
     const toggleBodyColorMode = (bsSheetEl) => {
       const mode = bsSheetEl.getAttribute("data-mode");
       const bodyEl = window.document.querySelector("body");
@@ -308,7 +286,7 @@ window.Quarto = {
     <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
-    <a class="navbar-brand" href="./index.html">
+    <a class="navbar-brand" href="../../index.html">
     <span class="navbar-title">Daniel Bartov</span>
     </a>
   </div>
@@ -319,7 +297,7 @@ window.Quarto = {
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
-    <a class="nav-link" href="./about.html"> 
+    <a class="nav-link" href="../../about.html"> 
 <span class="menu-text">About</span></a>
   </li>  
   <li class="nav-item compact">
@@ -338,115 +316,108 @@ window.Quarto = {
 <!-- content -->
 <header id="title-block-header" class="quarto-title-block default page-columns page-full">
   <div class="quarto-title-banner page-columns page-full">
-    <div class="quarto-title column-page-left">
-      <h1 class="title">blog</h1>
-                      </div>
+    <div class="quarto-title column-body">
+      <h1 class="title">Sending WhatsApp messages with Frida from a Mac</h1>
+                  <div>
+        <div class="description">
+          A reverse-engineering walkthrough: instrumenting the WhatsApp macOS app so you can send messages programmatically — no UI required — and the terminology you need along the way.
+        </div>
+      </div>
+                          <div class="quarto-categories">
+                <div class="quarto-category">reverse-engineering</div>
+                <div class="quarto-category">frida</div>
+                <div class="quarto-category">ctf</div>
+                <div class="quarto-category">macos</div>
+              </div>
+                  </div>
   </div>
     
   
-  <div class="quarto-title-meta column-page-left">
+  <div class="quarto-title-meta">
 
+      <div>
+      <div class="quarto-title-meta-heading">Author</div>
+      <div class="quarto-title-meta-contents">
+               <p>Daniel Bartov </p>
+            </div>
+    </div>
       
+      <div>
+      <div class="quarto-title-meta-heading">Published</div>
+      <div class="quarto-title-meta-contents">
+        <p class="date">May 30, 2026</p>
+      </div>
+    </div>
     
       
     </div>
     
   
-  </header><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-full page-navbar">
+  </header><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-        
-    <h5 class="quarto-listing-category-title">Categories</h5><div class="quarto-listing-category category-default"><div class="category" data-category="">All <span class="quarto-category-count">(2)</span></div><div class="category" data-category="Y3Rm">ctf <span class="quarto-category-count">(2)</span></div><div class="category" data-category="ZXhwbG9pdC1kZXY=">exploit-dev <span class="quarto-category-count">(1)</span></div><div class="category" data-category="ZnJpZGE=">frida <span class="quarto-category-count">(1)</span></div><div class="category" data-category="a2VybmVs">kernel <span class="quarto-category-count">(1)</span></div><div class="category" data-category="bWFjb3M=">macos <span class="quarto-category-count">(1)</span></div><div class="category" data-category="cmV2ZXJzZS1lbmdpbmVlcmluZw==">reverse-engineering <span class="quarto-category-count">(1)</span></div><div class="category" data-category="dG9vbHM=">tools <span class="quarto-category-count">(1)</span></div></div></div>
+    
 <!-- main -->
-<main class="content quarto-banner-title-block column-page-left" id="quarto-document-content">
+<main class="content quarto-banner-title-block" id="quarto-document-content">
 
 
 
 
 
 
+<p>This was a mobile reverse-engineering challenge: take the WhatsApp macOS app and drive it from the outside so you can <strong>send messages programmatically</strong>, without ever clicking anything in the UI. This post walks through how that works and explains the jargon as it comes up — so even if you’ve never reversed an app before, you can follow along.</p>
+<section id="the-tools-and-terms" class="level2">
+<h2 class="anchored" data-anchor-id="the-tools-and-terms">The tools and terms</h2>
+<p>A few things to know up front:</p>
+<ul>
+<li><strong>Frida</strong> is a <em>dynamic instrumentation</em> toolkit. In plain terms, it lets you inject your own JavaScript into a running program and call the program’s own functions, read its memory, and intercept its behavior while it runs. It’s the Swiss-army knife of app reversing.</li>
+<li><strong>Mac Catalyst</strong> is the technology that lets an iPad app run on macOS. The WhatsApp desktop app here is a Catalyst build, which means under the hood it’s really the iOS app — same internal class names, same frameworks.</li>
+<li><strong>Objective-C runtime.</strong> WhatsApp is written largely in Objective-C, a language where method calls are resolved at runtime by name. That’s a gift for reversers: Frida can look up any class and call its methods by their string names, almost like the app handed us an API.</li>
+<li><strong>JID</strong> (<em>Jabber ID</em>) is WhatsApp’s internal address for a chat. WhatsApp’s messaging is built on XMPP (the same protocol behind Jabber chat), and every conversation — a person or a group — is identified by a JID that looks like an email address, e.g.&nbsp;<code>65614920028283@lid</code>. When we send a message, the JID is <em>who</em> we’re sending it to.</li>
+</ul>
+</section>
+<section id="the-plan" class="level2">
+<h2 class="anchored" data-anchor-id="the-plan">The plan</h2>
+<p>We don’t want to reimplement WhatsApp’s encryption or network protocol — that’s a losing battle. Instead we let the real app do all the heavy lifting and just ask it, from the inside, to send a message for us. With Frida injected, we can reach into the app, grab the objects it already uses to send messages, and call the send method ourselves.</p>
+</section>
+<section id="the-catch-thread-context" class="level2">
+<h2 class="anchored" data-anchor-id="the-catch-thread-context">The catch: thread context</h2>
+<p>The first naive attempt crashes the app instantly with a <strong><code>SIGABRT</code></strong> (an abort signal — the program intentionally killing itself because an internal sanity check failed).</p>
+<p>The reason is that WhatsApp’s send code asserts it’s running inside one of the app’s own <em>work queues</em> — a specific background thread the app uses to serialize its messaging work. (A <strong>dispatch queue</strong> is just a managed line of tasks that run one at a time on a background thread.) Call the send function from the wrong thread and the app notices the missing context and aborts to protect itself.</p>
+<p>The fix is to not fight it. WhatsApp exposes a callback, <code>runWhenConnected:</code>, that hands a block of code to the connection’s own work queue and runs it there. By wrapping our send in that callback, our code runs in exactly the context the app expects — the assertion passes, nothing crashes, and we can fire a message on demand.</p>
+</section>
+<section id="driving-it" class="level2">
+<h2 class="anchored" data-anchor-id="driving-it">Driving it</h2>
+<p>Everything is wrapped in a small interactive Python shell that launches or attaches to WhatsApp, injects the Frida agent, and drops you into a prompt:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode sh code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># interactive shell</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> wa_shell.py</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># or one-shot from the command line — send one message and exit</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> wa_shell.py <span class="at">--send</span> <span class="st">"65614920028283@lid"</span> <span class="st">"hello from frida"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Inside the shell, the helpers read almost like a chat API:</p>
+<ul>
+<li><code>send_text(jid, text)</code> — send a text message to the chat identified by <code>jid</code></li>
+<li><code>send_image(jid, path, caption)</code> — send an image</li>
+<li><code>set_jid(jid)</code> — filter live output to a single chat</li>
+<li><code>status()</code> — sanity-check that the internal send objects resolved correctly</li>
+</ul>
+<p>So sending a message is just:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>send_text(<span class="st">"65614920028283@lid"</span>, <span class="st">"sent straight from Frida"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>A couple of quirks worth knowing:</p>
+<ul>
+<li>The <strong><code>jid</code></strong> is that internal chat address from earlier — not a phone number. The <code>@lid</code> suffix is one of WhatsApp’s addressing schemes for an identity.</li>
+<li>Text sending only works for a chat that <strong>already has an existing conversation</strong>, because the code looks up an existing chat <em>session</em> (the established cryptographic conversation state with that contact) rather than starting a fresh one.</li>
+<li>Images need to be <strong>“armed”</strong> once — send a single image from the UI first — before the programmatic image path will work.</li>
+</ul>
+</section>
+<section id="takeaway" class="level2">
+<h2 class="anchored" data-anchor-id="takeaway">Takeaway</h2>
+<p>The recurring lesson in app reversing: you rarely need to beat the app at its own game. It already knows how to encrypt, address, and send a message — your job is just to find the right internal lever and pull it. And when the app fights back with self-protective assertions, the cleanest move is to borrow its own machinery (here, its work queue) rather than work around it.</p>
 
 
+</section>
 
-
-<div class="quarto-listing quarto-listing-container-default" id="listing-listing">
-<div class="list quarto-listing-default">
-<div class="quarto-post image-right" data-index="0" data-categories="cmV2ZXJzZS1lbmdpbmVlcmluZyUyQ2ZyaWRhJTJDY3RmJTJDbWFjb3M=" data-listing-date-sort="1780099200000" data-listing-file-modified-sort="1780147639010" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="4" data-listing-word-count-sort="730">
-<div class="thumbnail"><a href="./posts/whatsapp-ctf/index.html" class="no-external">
-
-<div class="listing-item-img-placeholder card-img-top" >&nbsp;</div>
-
-</a></div>
-<div class="body">
-<h3 class="no-anchor listing-title">
-<a href="./posts/whatsapp-ctf/index.html" class="no-external">Sending WhatsApp messages with Frida from a Mac</a>
-</h3>
-<div class="listing-categories">
-
-<div class="listing-category" onclick="window.quartoListingCategory('cmV2ZXJzZS1lbmdpbmVlcmluZw=='); return false;">reverse-engineering</div>
-
-<div class="listing-category" onclick="window.quartoListingCategory('ZnJpZGE='); return false;">frida</div>
-
-<div class="listing-category" onclick="window.quartoListingCategory('Y3Rm'); return false;">ctf</div>
-
-<div class="listing-category" onclick="window.quartoListingCategory('bWFjb3M='); return false;">macos</div>
-
-</div>
-<div class="delink listing-description"><a href="./posts/whatsapp-ctf/index.html" class="no-external">
-<p>A reverse-engineering walkthrough: instrumenting the WhatsApp macOS app so you can send messages programmatically — no UI required — and the terminology you need along the way.</p>
-</a></div>
-</div>
-<div class="metadata">
-<a href="./posts/whatsapp-ctf/index.html" class="no-external">
-<div class="listing-date">
-May 30, 2026
-</div>
-<div class="listing-author">
-Daniel Bartov
-</div>
-</a>
-</div>
-</div>
-<div class="quarto-post image-right" data-index="1" data-categories="dG9vbHMlMkNrZXJuZWwlMkNjdGYlMkNleHBsb2l0LWRldg==" data-listing-date-sort="1780099200000" data-listing-file-modified-sort="1780147639010" data-listing-date-modified-sort="NaN" data-listing-reading-time-sort="3" data-listing-word-count-sort="430">
-<div class="thumbnail"><a href="./posts/kernel-utils/index.html" class="no-external">
-
-<div class="listing-item-img-placeholder card-img-top" >&nbsp;</div>
-
-</a></div>
-<div class="body">
-<h3 class="no-anchor listing-title">
-<a href="./posts/kernel-utils/index.html" class="no-external">kernel-utils: hacking on Linux kernels from a Mac</a>
-</h3>
-<div class="listing-categories">
-
-<div class="listing-category" onclick="window.quartoListingCategory('dG9vbHM='); return false;">tools</div>
-
-<div class="listing-category" onclick="window.quartoListingCategory('a2VybmVs'); return false;">kernel</div>
-
-<div class="listing-category" onclick="window.quartoListingCategory('Y3Rm'); return false;">ctf</div>
-
-<div class="listing-category" onclick="window.quartoListingCategory('ZXhwbG9pdC1kZXY='); return false;">exploit-dev</div>
-
-</div>
-<div class="delink listing-description"><a href="./posts/kernel-utils/index.html" class="no-external">
-<p>A small toolkit I built for kernel CTF and exploit-dev work — build, boot, and debug Linux kernels from a macOS host.</p>
-</a></div>
-</div>
-<div class="metadata">
-<a href="./posts/kernel-utils/index.html" class="no-external">
-<div class="listing-date">
-May 30, 2026
-</div>
-<div class="listing-author">
-Daniel Bartov
-</div>
-</a>
-</div>
-</div>
-</div>
-<div class="listing-no-matching d-none">No matching items</div>
-</div></main> <!-- /main -->
+</main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
   window.document.addEventListener("DOMContentLoaded", function (event) {
     // Ensure there is a toggle, if there isn't float one in the top right

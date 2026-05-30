@@ -2,6 +2,7 @@
   {
     "listing": "/index.html",
     "items": [
+      "/posts/whatsapp-ctf/index.html",
       "/posts/kernel-utils/index.html"
     ]
   }
